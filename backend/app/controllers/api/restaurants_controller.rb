@@ -1,15 +1,13 @@
-# app/controllers/api/restaurants_controller.rb
 module Api
   class RestaurantsController < ApplicationController
-    skip_before_action :authenticate_user_from_token!, only: [:index, :show]
+    before_action :authenticate_user_from_token!
 
 
     def index
       if current_user&.admin?
         restaurants = Restaurant.all
       else
-        # restaurants = Restaurant.where(country: current_user&.country)
-        restaurants = Restaurant.all
+        restaurants = Restaurant.where(country: current_user&.country)
       end
       render json: restaurants, include: :menu_items
     end

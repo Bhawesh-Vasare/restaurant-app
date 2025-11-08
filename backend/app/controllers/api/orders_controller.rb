@@ -1,6 +1,8 @@
 module Api
   class OrdersController < ApplicationController
     before_action :authenticate_user_from_token! 
+    before_action :authorize_admin_or_manager!, only: [:cancel, :checkout]
+    before_action :set_order, only: [:show, :cancel, :checkout]
 
     def create
       order = @current_user.orders.new(order_params)
@@ -12,65 +14,52 @@ module Api
     end
 
     def index
-      if @current_user.admin? || @current_user.manager?
-        orders = Order.includes(:order_items).all
-      else
-        orders = @current_user.orders.includes(:order_items)
-      end
+      orders = if @current_user.admin? || @current_user.manager?
+                 Order.includes(:order_items).all
+               else
+                 @current_user.orders.includes(:order_items)
+               end
 
       render json: orders.as_json(include: :order_items)
     end
     
     def show
-      order = if @current_user.admin? || @current_user.manager?
-                Order.includes(:order_items).find(params[:id])
-              else
-                @current_user.orders.includes(:order_items).find(params[:id])
-              end
-
-      render json: order.as_json(include: :order_items)
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: "Order not found" }, status: :not_found
+      render json: @order.as_json(include: :order_items)
     end
 
-
     def cancel
-      order = Order.find_by(id: params[:id])
-      if current_user.admin? || current_user.manager?
-        order.update(status: :canceled)
-        render json: { message: "Order canceled successfully", order: order }
-      else
-        render json: { error: "You are not authorized to cancel this order" }, status: :forbidden
-      end
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: "Order not found"}, status: :not_found
+      @order.update!(status: :canceled)
+      render json: { message: "Order canceled successfully", order: @order }
     end
 
     def checkout
-      order = if current_user.admin? || current_user.manager?
-                Order.find(params[:id])  
-              else
-                current_user.orders.find(params[:id])  
-              end
+      @order.update!(status: :paid)
+      render json: { message: "Order paid successfully", order: @order }
+    end
 
-      if current_user.admin? || current_user.manager?
-        order.update!(status: :paid)
-        render json: { message: "Order paid successfully", order: order }
-      else
-        render json: { error: "You are not authorized to perform checkout" }, status: :forbidden
-      end
+    private
+
+    def set_order
+      @order = if @current_user.admin? || @current_user.manager?
+                 Order.find(params[:id])
+               else
+                 @current_user.orders.find(params[:id])
+               end
     rescue ActiveRecord::RecordNotFound
       render json: { error: "Order not found" }, status: :not_found
     end
 
-
-
-
-    private
-
     def order_params
       params.require(:order).permit(:restaurant_id,
         order_items_attributes: [:menu_item_id, :quantity, :subtotal])
+    end
+
+    def authorize_admin!
+      render json: { error: "Unauthorized" }, status: :unauthorized unless @current_user.admin?
+    end
+
+    def authorize_admin_or_manager!
+      render json: { error: "Unauthorized" }, status: :unauthorized unless @current_user.admin? || @current_user.manager?
     end
   end
 end
