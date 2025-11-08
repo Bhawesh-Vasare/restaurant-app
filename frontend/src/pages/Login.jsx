@@ -18,6 +18,7 @@ const Login = () => {
       .then((data) => {
         if (data.token) {
           localStorage.setItem("token", data.token);
+          localStorage.setItem("user", JSON.stringify(data.user));
           alert("✅ Login successful!");
           navigate("/dashboard");
         } else {
