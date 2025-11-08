@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 
-const Orders = () => {
+const Orders = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const role = user?.role;
 
-  // Fetch all orders for the logged-in user
   useEffect(() => {
     fetch("http://localhost:3000/api/orders", {
       headers: {
@@ -24,6 +24,11 @@ const Orders = () => {
   }, []);
 
   const handleCancel = (orderId) => {
+    if (role !== "member") {
+      alert("❌ Only members can cancel orders!");
+      return;
+    }
+
     fetch(`http://localhost:3000/api/orders/${orderId}/cancel`, {
       method: "POST",
       headers: {
@@ -32,24 +37,44 @@ const Orders = () => {
       },
     })
       .then((res) => res.json())
-      .then((data) => {
+      .then(() => {
         alert(`❌ Order #${orderId} canceled`);
-        // Update local state
-        setOrders((prevOrders) =>
-          prevOrders.map((o) =>
+        setOrders((prev) =>
+          prev.map((o) =>
             o.id === orderId ? { ...o, status: "canceled" } : o
           )
         );
       })
-      .catch((err) => {
-        console.error(err);
-        alert("❌ Failed to cancel order");
-      });
+      .catch(() => alert("❌ Failed to cancel order"));
   };
 
-  if (loading) {
-    return <p className="text-center text-gray-500 mt-10">Loading orders...</p>;
-  }
+  const handleStatusChange = (orderId, newStatus) => {
+    if (role !== "admin") {
+      alert("⚠️ Only Admins can change status!");
+      return;
+    }
+
+    fetch(`http://localhost:3000/api/orders/${orderId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        token: localStorage.getItem("token") || "",
+      },
+      body: JSON.stringify({ status: newStatus }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        alert(`✅ Order #${orderId} marked as ${newStatus}`);
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId ? { ...o, status: newStatus } : o
+          )
+        );
+      })
+      .catch(() => alert("❌ Failed to update status"));
+  };
+
+  if (loading) return <p className="text-center mt-10">Loading orders...</p>;
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -84,13 +109,39 @@ const Orders = () => {
                 ))}
               </ul>
 
-              {order.status !== "canceled" && (
+              {/* MEMBER – can cancel */}
+              {role === "member" && order.status !== "canceled" && (
                 <button
                   onClick={() => handleCancel(order.id)}
                   className="mt-3 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
                 >
                   Cancel Order
                 </button>
+              )}
+
+              {/* ADMIN – can change status */}
+              {role === "admin" && (
+                <div className="mt-3 space-x-2">
+                  <button
+                    onClick={() => handleStatusChange(order.id, "approved")}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(order.id, "delivered")}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Mark Delivered
+                  </button>
+                </div>
+              )}
+
+              {/* MANAGER – read-only */}
+              {role === "manager" && (
+                <p className="text-sm text-gray-500 mt-2 italic">
+                  (View only – Manager access)
+                </p>
               )}
             </div>
           ))}
